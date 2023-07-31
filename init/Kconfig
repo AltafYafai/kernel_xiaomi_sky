@@ -625,6 +625,18 @@ config TASK_IO_ACCOUNTING
 
 	  Say N if unsure.
 
+config MIHW
+	bool "MI driver"
+	default n
+	help
+	  Mi driver code
+
+config GAEA_WALT
+	bool "gaea walt"
+	default n
+	help
+	  GAEA WALT
+
 config PSI
 	bool "Pressure stall information tracking"
 	help

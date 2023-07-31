@@ -3857,6 +3857,8 @@ static void dwc3_ext_event_notify(struct dwc3_msm *mdwc)
 
 	dbg_log_string("enter: mdwc->inputs:%lx hs_phy_flags:%x\n",
 				mdwc->inputs, mdwc->hs_phy->flags);
+	pr_err("%s(): enter: mdwc->inputs:%lx hs_phy_flags:%x\n",
+		__func__, mdwc->inputs, mdwc->hs_phy->flags);
 	if (mdwc->id_state == DWC3_ID_FLOAT) {
 		dbg_log_string("XCVR: ID set\n");
 		set_bit(ID, &mdwc->inputs);
@@ -3908,6 +3910,8 @@ static void dwc3_ext_event_notify(struct dwc3_msm *mdwc)
 
 	dbg_log_string("eud: state:%d active:%d hs_phy_flags:0x%x\n",
 		mdwc->check_eud_state, mdwc->eud_active, mdwc->hs_phy->flags);
+	pr_err("%s(): eud: state:%d active:%d hs_phy_flags:0x%x\n",
+		__func__, mdwc->check_eud_state, mdwc->eud_active, mdwc->hs_phy->flags);
 
 	/* handle case of USB cable disconnect after USB spoof disconnect */
 	if (!mdwc->vbus_active &&
@@ -3920,6 +3924,7 @@ static void dwc3_ext_event_notify(struct dwc3_msm *mdwc)
 	}
 
 	dbg_log_string("exit: mdwc->inputs:%lx\n", mdwc->inputs);
+	pr_err("%s(): exit: mdwc->inputs:%lx\n", __func__, mdwc->inputs);
 	queue_delayed_work(mdwc->sm_usb_wq, &mdwc->sm_work, 0);
 }
 
@@ -4493,6 +4498,8 @@ static int dwc3_msm_set_role(struct dwc3_msm *mdwc, enum usb_role role)
 
 	dbg_log_string("cur_role:%s new_role:%s refcnt:%d\n", usb_role_string(cur_role),
 				usb_role_string(role), mdwc->refcnt_dp_usb);
+	pr_err("%s(): cur_role:%s new_role:%s refcnt:%d\n", __func__, usb_role_string(cur_role),
+		usb_role_string(role), mdwc->refcnt_dp_usb);
 
 	/*
 	 * For boot up without USB cable connected case, don't check
@@ -4501,6 +4508,7 @@ static int dwc3_msm_set_role(struct dwc3_msm *mdwc, enum usb_role role)
 	 */
 	if (mdwc->drd_state != DRD_STATE_UNDEFINED && cur_role == role) {
 		dbg_log_string("no USB role change");
+		pr_err("%s(): no USB role change\n", __func__);
 		mutex_unlock(&mdwc->role_switch_mutex);
 		return 0;
 	}
@@ -4536,6 +4544,8 @@ static int dwc3_msm_set_role(struct dwc3_msm *mdwc, enum usb_role role)
 	}
 	dbg_log_string("new_role:%s refcnt:%d\n",
 		usb_role_string(role), mdwc->refcnt_dp_usb);
+	pr_err("%s(): new_role:%s refcnt:%d\n", __func__,
+		usb_role_string(role), mdwc->refcnt_dp_usb);
 	mutex_unlock(&mdwc->role_switch_mutex);
 
 	dwc3_ext_event_notify(mdwc);
@@ -4545,6 +4555,7 @@ static int dwc3_msm_set_role(struct dwc3_msm *mdwc, enum usb_role role)
 static int dwc3_msm_usb_role_switch_set_role(struct usb_role_switch *sw, enum usb_role role)
 {
 	struct dwc3_msm *mdwc = usb_role_switch_get_drvdata(sw);
+	pr_err("%s(): Set usb role to [%s]\n", __func__, usb_role_string(role));
 
 	return dwc3_msm_set_role(mdwc, role);
 }
@@ -5808,7 +5819,7 @@ static int dwc3_otg_start_host(struct dwc3_msm *mdwc, int on)
 	u32 reg;
 
 	if (on) {
-		dev_dbg(mdwc->dev, "%s: turn on host\n", __func__);
+		dev_info(mdwc->dev, "%s: turn on host\n", __func__);
 		mdwc->hs_phy->flags |= PHY_HOST_MODE;
 		dbg_event(0xFF, "hs_phy_flag:", mdwc->hs_phy->flags);
 		pm_runtime_get_sync(mdwc->dev);
@@ -5906,7 +5917,7 @@ static int dwc3_otg_start_host(struct dwc3_msm *mdwc, int on)
 		schedule_delayed_work(&mdwc->perf_vote_work,
 				msecs_to_jiffies(1000 * PM_QOS_SAMPLE_SEC));
 	} else {
-		dev_dbg(mdwc->dev, "%s: turn off host\n", __func__);
+		dev_info(mdwc->dev, "%s: turn off host\n", __func__);
 
 		cancel_delayed_work_sync(&mdwc->perf_vote_work);
 		msm_dwc3_perf_vote_update(mdwc, false);
@@ -5996,7 +6007,7 @@ static int dwc3_otg_start_peripheral(struct dwc3_msm *mdwc, int on)
 		atomic_read(&mdwc->dev->power.usage_count));
 
 	if (on) {
-		dev_dbg(mdwc->dev, "%s: turn on gadget\n", __func__);
+		dev_info(mdwc->dev, "%s: turn on gadget\n", __func__);
 
 		pm_runtime_get_sync(&mdwc->dwc3->dev);
 		/*
@@ -6061,7 +6072,7 @@ static int dwc3_otg_start_peripheral(struct dwc3_msm *mdwc, int on)
 		schedule_delayed_work(&mdwc->perf_vote_work,
 				msecs_to_jiffies(1000 * PM_QOS_SAMPLE_SEC));
 	} else {
-		dev_dbg(mdwc->dev, "%s: turn off gadget\n", __func__);
+		dev_info(mdwc->dev, "%s: turn off gadget\n", __func__);
 		cancel_delayed_work_sync(&mdwc->perf_vote_work);
 		msm_dwc3_perf_vote_update(mdwc, false);
 		cpu_latency_qos_remove_request(&mdwc->pm_qos_req_dma);
@@ -6130,7 +6141,7 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 	}
 
 	state = dwc3_drd_state_string(mdwc->drd_state);
-	dev_dbg(mdwc->dev, "%s state\n", state);
+	dev_info(mdwc->dev, "%s(): %s state\n", __func__, state);
 	dbg_event(0xFF, state, 0);
 
 	/* Check OTG state */
