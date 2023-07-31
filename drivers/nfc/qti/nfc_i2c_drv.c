@@ -37,7 +37,7 @@
  */
 
 #include "nfc_common.h"
-
+#include <linux/delay.h>
 /**
  * i2c_disable_irq()
  *
@@ -384,6 +384,18 @@ int nfc_i2c_dev_probe(struct i2c_client *client, const struct i2c_device_id *id)
 		pr_err("LDO config failed\n");
 		goto err_ldo_config_failed;
 	}
+
+	gpio_set_ven(nfc_dev, 1);
+	usleep_range(20000, 20100);
+	pr_info("%s gpio.ven is %d\n", __func__, gpio_get_value(nfc_dev->configs.gpio.ven));
+	/*************************QCom suggest**jeff add for test*********************************/
+	gpio_set_ven(nfc_dev, 0);
+	usleep_range(20000, 20100);
+	pr_info("%s gpio.ven is %d\n", __func__, gpio_get_value(nfc_dev->configs.gpio.ven));
+	gpio_set_ven(nfc_dev, 1);
+	usleep_range(20000, 20100);
+	pr_info("%s gpio.ven is %d\n", __func__, gpio_get_value(nfc_dev->configs.gpio.ven));
+	/*****************************************************************************************/
 
 	ret = nfcc_hw_check(nfc_dev);
 	if (ret || nfc_dev->nfc_state == NFC_STATE_UNKNOWN) {
