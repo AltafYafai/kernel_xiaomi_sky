@@ -12,12 +12,6 @@
 #include <../../../drivers/android/binder_internal.h>
 #include "../../../drivers/android/binder_trace.h"
 
-#ifdef CONFIG_GAEA_WALT
-#include "../../../drivers/mihw/include/mi_module.h"
-
-extern struct walt_get_indicies_hooks mi_walt_get_indicies_func[WALT_CFS_TYPES];
-#endif
-
 static void create_util_to_cost_pd(struct em_perf_domain *pd)
 {
 	int util, cpu = cpumask_first(to_cpumask(pd->cpus));
@@ -187,19 +181,6 @@ static void walt_get_indicies(struct task_struct *p, int *order_index,
 			*end_index = 1;
 		return;
 	}
-
-#ifdef CONFIG_GAEA_WALT
-	for (mod = 0; mod < WALT_CFS_TYPES; mod++) {
-		if (mi_walt_get_indicies_func[mod].f) {
-			mi_walt_get_indicies_func[mod].f(p, order_index, end_index,
-				num_sched_clusters, &check_return);
-			if(check_return) {
-				*energy_eval_needed = false;
-				return;
-			}
-		}
-	}
-#endif
 
 	if (is_uclamp_boosted || per_task_boost ||
 		task_boost_policy(p) == SCHED_BOOST_ON_BIG ||
