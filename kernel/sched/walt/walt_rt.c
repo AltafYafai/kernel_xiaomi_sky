@@ -8,12 +8,6 @@
 #include "walt.h"
 #include "trace.h"
 
-#ifdef CONFIG_GAEA_WALT
-#include "../../../drivers/mihw/include/mi_module.h"
-
-extern struct walt_get_indicies_hooks mi_walt_get_indicies_func[WALT_CFS_TYPES];
-#endif
-
 static DEFINE_PER_CPU(cpumask_var_t, walt_local_cpu_mask);
 
 static void walt_rt_energy_aware_wake_cpu(void *unused, struct task_struct *task,
@@ -31,21 +25,6 @@ static void walt_rt_energy_aware_wake_cpu(void *unused, struct task_struct *task
 	int order_index = (boost_on_big && num_sched_clusters > 1) ? 1 : 0;
 	bool best_cpu_lt = true;
 	int line_no = -1;
-#ifdef CONFIG_GAEA_WALT
-	const struct cpumask *gaea_mask;
-	int end_index;
-	bool check_return = false;
-	int mod;
-
-	for (mod = 0; mod < WALT_CFS_TYPES; mod++) {
-		if (mi_walt_get_indicies_func[mod].f) {
-			mi_walt_get_indicies_func[mod].f(task, &order_index, &end_index,
-				num_sched_clusters, &check_return);
-			if (check_return)
-				break;
-		}
-	}
-#endif
 
 	if (unlikely(walt_disabled))
 		return;
@@ -55,16 +34,7 @@ static void walt_rt_energy_aware_wake_cpu(void *unused, struct task_struct *task
 
 	rcu_read_lock();
 	for (cluster = 0; cluster < num_sched_clusters; cluster++) {
-#ifdef CONFIG_GAEA_WALT
-		if (check_return && order_index == 1)
-			gaea_mask = cpu_online_mask;
-		else
-			gaea_mask = lowest_mask;
-
-		for_each_cpu_and(cpu, gaea_mask, &cpu_array[order_index][cluster]) {
-#else
 		for_each_cpu_and(cpu, lowest_mask, &cpu_array[order_index][cluster]) {
-#endif
 			bool lt;
 
 			trace_sched_cpu_util(cpu, task, line_no);
