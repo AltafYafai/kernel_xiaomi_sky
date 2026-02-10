@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 #ifndef __ADRENO_HFI_H
 #define __ADRENO_HFI_H
@@ -366,10 +366,13 @@ struct hfi_queue_header {
 #define HFI_V1_MSG_POST 1 /* V1 only */
 #define HFI_V1_MSG_ACK 2/* V1 only */
 
-/* Size is converted from Bytes to DWords */
-#define CREATE_MSG_HDR(id, size, type) \
-	(((type) << 16) | ((((size) >> 2) & 0xFF) << 8) | ((id) & 0xFF))
-#define ACK_MSG_HDR(id, size) CREATE_MSG_HDR(id, size, HFI_MSG_ACK)
+#define MSG_HDR_SET_SIZE(hdr, size) \
+	(((size & 0xFF) << 8) | hdr)
+
+#define CREATE_MSG_HDR(id, type) \
+	(((type) << 16) | ((id) & 0xFF))
+
+#define ACK_MSG_HDR(id) CREATE_MSG_HDR(id, HFI_MSG_ACK)
 
 #define HFI_QUEUE_DEFAULT_CNT 3
 #define HFI_QUEUE_DISPATCH_MAX_CNT 14
@@ -395,11 +398,13 @@ struct hfi_queue_table {
 #define MSG_HDR_GET_TYPE(hdr) (((hdr) >> 16) & 0xF)
 #define MSG_HDR_GET_SEQNUM(hdr) (((hdr) >> 20) & 0xFFF)
 
-#define HDR_CMP_SEQNUM(out_hdr, in_hdr) \
-	(MSG_HDR_GET_SEQNUM(out_hdr) == MSG_HDR_GET_SEQNUM(in_hdr))
+#define CMP_HFI_ACK_HDR(sent, rcvd) (sent == rcvd)
 
 #define MSG_HDR_SET_SEQNUM(hdr, num) \
 	(((hdr) & 0xFFFFF) | ((num) << 20))
+
+#define MSG_HDR_SET_SEQNUM_SIZE(hdr, seqnum, sizedwords) \
+	(FIELD_PREP(GENMASK(31, 20), seqnum) | FIELD_PREP(GENMASK(15, 8), sizedwords) | hdr)
 
 #define QUEUE_HDR_TYPE(id, prio, rtype, stype) \
 	(((id) & 0xFF) | (((prio) & 0xFF) << 8) | \
@@ -445,6 +450,7 @@ struct hfi_queue_table {
 #define F2H_MSG_CONTEXT_BAD		150
 #define H2F_MSG_HW_FENCE_INFO		151
 #define H2F_MSG_ISSUE_SYNCOBJ		152
+#define F2H_MSG_PROCESS_TRACE		155
 
 enum gmu_ret_type {
 	GMU_SUCCESS = 0,
@@ -670,6 +676,21 @@ struct hfi_debug_cmd {
 } __packed;
 
 /* F2H */
+struct hfi_trace_cmd {
+	u32 hdr;
+	u32 version;
+	u64 identifier;
+} __packed;
+
+/* Trace packet definition */
+struct gmu_trace_packet {
+	u32 hdr;
+	u32 trace_id;
+	u64 ticks;
+	u32 payload[];
+} __packed;
+
+/* F2H */
 struct hfi_gmu_cntr_register_cmd {
 	u32 hdr;
 	u32 group_id;
@@ -761,6 +782,8 @@ struct hfi_ts_retire_cmd {
 	u64 sop;
 	u64 eop;
 	u64 retired_on_gmu;
+	u64 active;
+	u32 version;
 } __packed;
 
 /* H2F */
@@ -889,7 +912,7 @@ static inline int _CMD_MSG_HDR(u32 *hdr, int id, size_t size)
 	if (WARN_ON(size > HFI_MAX_MSG_SIZE))
 		return -EMSGSIZE;
 
-	*hdr = CREATE_MSG_HDR(id, size, HFI_MSG_CMD);
+	*hdr = CREATE_MSG_HDR(id, HFI_MSG_CMD);
 	return 0;
 }
 

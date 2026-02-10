@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _GEN7_REG_H
@@ -54,6 +54,7 @@
 #define GEN7_CP_CHICKEN_DBG              0x841
 #define GEN7_CP_DBG_ECO_CNTL             0x843
 #define GEN7_CP_APRIV_CNTL               0x844
+#define GEN7_CP_SEMAPHORE_REG_0          0x846
 #define GEN7_CP_PROTECT_CNTL             0x84f
 #define GEN7_CP_PROTECT_REG              0x850
 #define GEN7_CP_CONTEXT_SWITCH_CNTL      0x8a0
@@ -107,9 +108,16 @@
 #define GEN7_CP_IB2_BASE                 0x92b
 #define GEN7_CP_IB2_BASE_HI              0x92c
 #define GEN7_CP_IB2_REM_SIZE             0x92d
+#define GEN7_CP_IB3_BASE                 0xa67
+#define GEN7_CP_IB3_BASE_HI              0xa68
+#define GEN7_CP_IB3_REM_SIZE             0xa69
 #define GEN7_CP_ALWAYS_ON_COUNTER_LO     0x980
 #define GEN7_CP_ALWAYS_ON_COUNTER_HI     0x981
+#define GEN7_CP_ALWAYS_ON_CONTEXT_LO     0x982
+#define GEN7_CP_ALWAYS_ON_CONTEXT_HI     0x983
 #define GEN7_CP_AHB_CNTL                 0x98d
+#define GEN7_CP_RL_ERROR_DETAILS_0       0x9b4
+#define GEN7_CP_RL_ERROR_DETAILS_1       0x9cf
 #define GEN7_CP_APERTURE_CNTL_HOST       0xa00
 #define GEN7_CP_APERTURE_CNTL_CD         0xa03
 #define GEN7_CP_BV_PROTECT_STATUS        0xa61
@@ -132,8 +140,11 @@
 #define GEN7_CP_BV_CHICKEN_DBG           0xada
 
 /* LPAC registers */
+#define GEN7_CP_LPAC_RB_BASE             0xb00
+#define GEN7_CP_LPAC_RB_BASE_HI          0xb01
 #define GEN7_CP_LPAC_RB_RPTR             0xb06
 #define GEN7_CP_LPAC_RB_WPTR             0xb07
+#define GEN7_CP_LPAC_PROTECT_CNTL        0xb09
 #define GEN7_CP_LPAC_DRAW_STATE_ADDR     0xb0a
 #define GEN7_CP_LPAC_DRAW_STATE_DATA     0xb0b
 #define GEN7_CP_LPAC_ROQ_DBG_ADDR        0xb0c
@@ -1158,6 +1169,7 @@
 #define GEN7_GMU_GENERAL_8			0x1f9cd
 #define GEN7_GMU_GENERAL_9			0x1f9ce
 #define GEN7_GMU_GENERAL_10			0x1f9cf
+#define GEN7_GMU_GENERAL_11			0x1f9d0
 
 /* FAL10 veto register */
 #define GEN7_GPU_GMU_CX_GMU_CX_FAL_INTF		0x1f8f0

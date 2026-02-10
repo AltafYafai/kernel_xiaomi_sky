@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _ADRENO_GEN7_HWSCHED_HFI_H_
@@ -29,6 +29,8 @@ struct gen7_hwsched_hfi {
 	struct kgsl_memdesc *big_ib;
 	/** @big_ib_recurring: GMU buffer to hold big recurring IBs */
 	struct kgsl_memdesc *big_ib_recurring;
+	/** @perfctr_scratch: Buffer to hold perfcounter PM4 commands */
+	struct kgsl_memdesc *perfctr_scratch;
 	/** @msg_mutex: Mutex for accessing the msgq */
 	struct mutex msgq_mutex;
 };
@@ -90,16 +92,31 @@ void gen7_hwsched_hfi_stop(struct adreno_device *adreno_dev);
 int gen7_hwsched_cp_init(struct adreno_device *adreno_dev);
 
 /**
+ * gen7_hwsched_counter_inline_enable - Configure a performance counter for a countable
+ * @adreno_dev -  Adreno device to configure
+ * @group - Desired performance counter group
+ * @counter - Desired performance counter in the group
+ * @countable - Desired countable
+ *
+ * Physically set up a counter within a group with the desired countable
+ * Return 0 on success or negative error on failure.
+ */
+int gen7_hwsched_counter_inline_enable(struct adreno_device *adreno_dev,
+		const struct adreno_perfcount_group *group,
+		u32 counter, u32 countable);
+
+/**
  * gen7_hfi_send_cmd_async - Send an hfi packet
  * @adreno_dev: Pointer to adreno device structure
  * @data: Data to be sent in the hfi packet
+ * @size_bytes: Size of the packet in bytes
  *
  * Send data in the form of an HFI packet to gmu and wait for
  * it's ack asynchronously
  *
  * Return: 0 on success and negative error on failure.
  */
-int gen7_hfi_send_cmd_async(struct adreno_device *adreno_dev, void *data);
+int gen7_hfi_send_cmd_async(struct adreno_device *adreno_dev, void *data, u32 size_bytes);
 
 /**
  * gen7_hwsched_submit_drawobj - Dispatch IBs to dispatch queues

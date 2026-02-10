@@ -310,6 +310,7 @@ struct battery_chg_dev {
 	/*shutdown delay is supported*/
 	bool				shutdown_delay_en;
 	bool				report_power_absent;
+	bool				error_prop;
 };
 
 static const int battery_prop_map[BATT_PROP_MAX] = {
@@ -465,6 +466,7 @@ static int battery_chg_write(struct battery_chg_dev *bcdev, void *data,
 
 	mutex_lock(&bcdev->rw_lock);
 	reinit_completion(&bcdev->ack);
+	bcdev->error_prop = false;
 	rc = pmic_glink_write(bcdev->client, data, len);
 	if (!rc) {
 		rc = wait_for_completion_timeout(&bcdev->ack,
@@ -475,8 +477,20 @@ static int battery_chg_write(struct battery_chg_dev *bcdev, void *data,
 			mutex_unlock(&bcdev->rw_lock);
 			return -ETIMEDOUT;
 		}
-
 		rc = 0;
+
+		/*
+		 * In case the opcode used is not supported, the remote
+		 * processor might ack it immediately with a return code indicating
+		 * an error. This additional check is to check if such an error has
+		 * happened and return immediately with error in that case. This
+		 * avoids wasting time waiting in the above timeout condition for this
+		 * type of error.
+		 */
+		if (bcdev->error_prop) {
+			bcdev->error_prop = false;
+			rc = -ENODATA;
+		}
 	}
 	mutex_unlock(&bcdev->rw_lock);
 	up_read(&bcdev->state_sem);
@@ -682,8 +696,8 @@ int qti_battery_charger_set_prop(const char *name,
 }
 EXPORT_SYMBOL(qti_battery_charger_set_prop);
 
-static bool validate_message(struct battery_charger_resp_msg *resp_msg,
-				size_t len)
+static bool validate_message(struct battery_chg_dev *bcdev,
+			struct battery_charger_resp_msg *resp_msg, size_t len)
 {
 	if (len != sizeof(*resp_msg)) {
 		pr_err("Incorrect response length %zu for opcode %#x\n", len,
@@ -692,9 +706,10 @@ static bool validate_message(struct battery_charger_resp_msg *resp_msg,
 	}
 
 	if (resp_msg->ret_code) {
-		pr_err("Error in response for opcode %#x prop_id %u, rc=%d\n",
+		pr_err_ratelimited("Error in response for opcode %#x prop_id %u, rc=%d\n",
 			resp_msg->hdr.opcode, resp_msg->property_id,
 			(int)resp_msg->ret_code);
+		bcdev->error_prop = true;
 		return false;
 	}
 
@@ -728,7 +743,7 @@ static void handle_message(struct battery_chg_dev *bcdev, void *data,
 		}
 
 		/* Other response should be of same type as they've u32 value */
-		if (validate_message(resp_msg, len) &&
+		if (validate_message(bcdev, resp_msg, len) &&
 		    resp_msg->property_id < pst->prop_count) {
 			pst->prop[resp_msg->property_id] = resp_msg->value;
 			ack_set = true;
@@ -737,7 +752,7 @@ static void handle_message(struct battery_chg_dev *bcdev, void *data,
 		break;
 	case BC_USB_STATUS_GET:
 		pst = &bcdev->psy_list[PSY_TYPE_USB];
-		if (validate_message(resp_msg, len) &&
+		if (validate_message(bcdev, resp_msg, len) &&
 		    resp_msg->property_id < pst->prop_count) {
 			pst->prop[resp_msg->property_id] = resp_msg->value;
 			ack_set = true;
@@ -746,7 +761,7 @@ static void handle_message(struct battery_chg_dev *bcdev, void *data,
 		break;
 	case BC_WLS_STATUS_GET:
 		pst = &bcdev->psy_list[PSY_TYPE_WLS];
-		if (validate_message(resp_msg, len) &&
+		if (validate_message(bcdev, resp_msg, len) &&
 		    resp_msg->property_id < pst->prop_count) {
 			pst->prop[resp_msg->property_id] = resp_msg->value;
 			ack_set = true;
@@ -765,7 +780,7 @@ static void handle_message(struct battery_chg_dev *bcdev, void *data,
 	case BC_USB_STATUS_SET:
 	case BC_WLS_STATUS_SET:
 	case BC_XM_STATUS_SET:
-		if (validate_message(data, len))
+		if (validate_message(bcdev, data, len))
 			ack_set = true;
 
 		break;
@@ -826,7 +841,7 @@ static void handle_message(struct battery_chg_dev *bcdev, void *data,
 		break;
 	}
 
-	if (ack_set)
+	if (ack_set || bcdev->error_prop)
 		complete(&bcdev->ack);
 }
 
@@ -2353,7 +2368,6 @@ static CLASS_ATTR_RW(input_suspend);
 
 static ssize_t StopCharging_Test_show(struct class *c,
 					struct class_attribute *attr, char *buf)
-{
 	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
 						battery_class);
 	int rc;
@@ -2689,6 +2703,55 @@ static ssize_t connector_temp_show(struct class *c,
 }
 static CLASS_ATTR_RW(connector_temp);
 
+static ssize_t charging_enabled_store(struct class *c,
+				      struct class_attribute *attr,
+				      const char *buf, size_t count)
+{
+	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
+						battery_class);
+	int rc;
+	bool val;
+
+	if (kstrtobool(buf, &val))
+		return -EINVAL;
+
+	if (val) {
+		/*
+		 * Enable charging, i.e. set the restricted current back to
+		 * the thermal limit and unset the restriction boolean flag.
+		 */
+		rc = __battery_psy_set_charge_current(bcdev,
+				bcdev->thermal_fcc_ua);
+		if (rc < 0)
+			return rc;
+		bcdev->restrict_fcc_ua = bcdev->thermal_fcc_ua;
+		bcdev->restrict_chg_en = 0;
+	} else {
+		/*
+		 * Disable charging, i.e. set the restricted current to zero
+		 * and set the restriction boolean flag.
+		 */
+		rc = __battery_psy_set_charge_current(bcdev, 0 /* 0 uA */);
+		if (rc < 0)
+			return rc;
+		bcdev->restrict_fcc_ua = 0;
+		bcdev->restrict_chg_en = 1;
+	}
+
+	return count;
+}
+
+static ssize_t charging_enabled_show(struct class *c,
+				     struct class_attribute *attr, char *buf)
+{
+	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
+						battery_class);
+	bool val = !bcdev->restrict_chg_en && bcdev->restrict_fcc_ua;
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", val);
+}
+static CLASS_ATTR_RW(charging_enabled);
+
 static struct attribute *battery_class_attrs[] = {
 	&class_attr_soh.attr,
 	&class_attr_resistance.attr,
@@ -2707,6 +2770,7 @@ static struct attribute *battery_class_attrs[] = {
 	&class_attr_restrict_cur.attr,
 	&class_attr_usb_real_type.attr,
 	&class_attr_usb_typec_compliant.attr,
+	&class_attr_charging_enabled.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(battery_class);
@@ -2741,6 +2805,7 @@ static struct attribute *battery_class_no_wls_attrs[] = {
 	&class_attr_debug_dump.attr,
 	&class_attr_shipmode_count_reset.attr,
 	&class_attr_connector_temp.attr,
+	&class_attr_charging_enabled.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(battery_class_no_wls);

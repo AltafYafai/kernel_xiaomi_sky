@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2013-2014,2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef _DRIVERS_MMC_SDHCI_MSM_H
@@ -312,6 +312,7 @@ struct sdhci_msm_host {
 	bool uses_tassadar_dll;
 	bool uses_level_shifter;
 	bool dll_lock_bist_fail_wa;
+	bool need_special_up_threshold;
 	u32 dll_config;
 	u32 ddr_config;
 	u16 last_cmd;
@@ -333,6 +334,7 @@ struct sdhci_msm_host {
 	int clk_scale_init_done;
 	int defer_clk_scaling_resume;
 	int scaling_suspended;
+	struct notifier_block sdhci_msm_pm_notifier;
 };
 
 struct mmc_pwrseq_ops {

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __KGSL_DEVICE_H
 #define __KGSL_DEVICE_H
@@ -280,7 +280,7 @@ struct kgsl_device {
 	struct kgsl_pwrscale pwrscale;
 
 	int reset_counter; /* Track how many GPU core resets have occurred */
-	struct workqueue_struct *events_wq;
+	struct kthread_worker *events_worker;
 
 	/* Number of active contexts seen globally for this device */
 	int active_context_count;
@@ -327,6 +327,21 @@ struct kgsl_device {
 	struct kobject bcl_data_kobj;
 	/** @idle_jiffies: Latest idle jiffies */
 	unsigned long idle_jiffies;
+
+	/** @work_period_timer: Timer to capture application GPU work stats */
+	struct timer_list work_period_timer;
+	/** work_period_lock: Lock to protect process application GPU work periods */
+	spinlock_t work_period_lock;
+	/** work_period_ws: Worker thread to emulate application GPU work event */
+	struct work_struct work_period_ws;
+	/** @flags: Flags for gpu_period stats */
+	unsigned long flags;
+	struct {
+		u64 begin;
+		u64 end;
+	} gpu_period;
+	/** @dump_all_ibs: Whether to dump all ibs in snapshot */
+	bool dump_all_ibs;
 };
 
 #define KGSL_MMU_DEVICE(_mmu) \
@@ -504,6 +519,8 @@ struct kgsl_process_private {
 	 * @reclaim_lock: Mutex lock to protect KGSL_PROC_PINNED_STATE
 	 */
 	struct mutex reclaim_lock;
+	/** @period: Stats for GPU utilization */
+	struct gpu_work_period *period;
 	/**
 	 * @cmd_count: The number of cmds that are active for the process
 	 */
@@ -532,8 +549,10 @@ struct kgsl_device_private {
  * struct kgsl_snapshot - details for a specific snapshot instance
  * @ib1base: Active IB1 base address at the time of fault
  * @ib2base: Active IB2 base address at the time of fault
+ * @ib3base: Active IB3 base address at the time of fault
  * @ib1size: Number of DWORDS pending in IB1 at the time of fault
  * @ib2size: Number of DWORDS pending in IB2 at the time of fault
+ * @ib3size: Number of DWORDS pending in IB3 at the time of fault
  * @ib1dumped: Active IB1 dump status to sansphot binary
  * @ib2dumped: Active IB2 dump status to sansphot binary
  * @start: Pointer to the start of the static snapshot region
@@ -553,10 +572,12 @@ struct kgsl_device_private {
  * @recovered: True if GPU was recovered after previous snapshot
  */
 struct kgsl_snapshot {
-	uint64_t ib1base;
-	uint64_t ib2base;
-	unsigned int ib1size;
-	unsigned int ib2size;
+	u64 ib1base;
+	u64 ib2base;
+	u64 ib3base;
+	u32 ib1size;
+	u32 ib2size;
+	u32 ib3size;
 	bool ib1dumped;
 	bool ib2dumped;
 	u64 ib1base_lpac;
@@ -609,6 +630,18 @@ static inline void kgsl_regread(struct kgsl_device *device,
 				unsigned int *value)
 {
 	*value = kgsl_regmap_read(&device->regmap, offsetwords);
+}
+
+static inline void kgsl_regread64(struct kgsl_device *device,
+				u32 offsetwords_lo, u32 offsetwords_hi,
+				u64 *value)
+{
+	u32 val_lo = 0, val_hi = 0;
+
+	val_lo = kgsl_regmap_read(&device->regmap, offsetwords_lo);
+	val_hi = kgsl_regmap_read(&device->regmap, offsetwords_hi);
+
+	*value = (((u64)val_hi << 32) | val_lo);
 }
 
 static inline void kgsl_regwrite(struct kgsl_device *device,

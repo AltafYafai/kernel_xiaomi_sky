@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/io.h>
@@ -225,6 +225,10 @@ static const struct mhi_controller_config cnss_mhi_config = {
 	.event_cfg = cnss_mhi_events,
 	.m2_no_db = true,
 };
+
+static void cnss_pci_update_link_event(struct cnss_pci_data *pci_priv,
+				       enum cnss_bus_event_type type,
+				       void *data);
 
 static struct cnss_pci_reg ce_src[] = {
 	{ "SRC_RING_BASE_LSB", CE_SRC_RING_BASE_LSB_OFFSET },
@@ -838,7 +842,7 @@ static int cnss_setup_bus_bandwidth(struct cnss_plat_data *plat_priv,
 		return -EINVAL;
 	}
 
-	cnss_pr_vdbg("Bandwidth vote to %d, save %d\n", bw, save);
+	cnss_pr_buf("Bandwidth vote to %d, save %d\n", bw, save);
 
 	list_for_each_entry(bus_bw_info, &plat_priv->icc.list_head, list) {
 		ret = icc_set_bw(bus_bw_info->icc_path,
@@ -1103,6 +1107,8 @@ int cnss_resume_pci_link(struct cnss_pci_data *pci_priv)
 	ret = cnss_set_pci_link(pci_priv, PCI_LINK_UP);
 	if (ret) {
 		ret = -EAGAIN;
+		cnss_pci_update_link_event(pci_priv,
+					   BUS_EVENT_PCI_LINK_RESUME_FAIL, NULL);
 		goto out;
 	}
 
@@ -3092,6 +3098,8 @@ int cnss_pci_register_driver_hdlr(struct cnss_pci_data *pci_priv,
 	if (ret) {
 		clear_bit(CNSS_DRIVER_LOADING, &plat_priv->driver_state);
 		pci_priv->driver_ops = NULL;
+	} else {
+		set_bit(CNSS_DRIVER_REGISTERED, &plat_priv->driver_state);
 	}
 
 	return ret;
@@ -3108,7 +3116,7 @@ int cnss_pci_unregister_driver_hdlr(struct cnss_pci_data *pci_priv)
 	set_bit(CNSS_DRIVER_UNLOADING, &plat_priv->driver_state);
 	cnss_pci_dev_shutdown(pci_priv);
 	pci_priv->driver_ops = NULL;
-
+	clear_bit(CNSS_DRIVER_REGISTERED, &plat_priv->driver_state);
 	return 0;
 }
 
@@ -5077,10 +5085,23 @@ void cnss_pci_clear_dump_info(struct cnss_pci_data *pci_priv)
 
 void cnss_pci_device_crashed(struct cnss_pci_data *pci_priv)
 {
+	struct cnss_plat_data *plat_priv;
+
 	if (!pci_priv)
 		return;
 
-	cnss_device_crashed(&pci_priv->pci_dev->dev);
+	plat_priv = pci_priv->plat_priv;
+	if (!plat_priv) {
+		cnss_pr_err("plat_priv is NULL\n");
+		return;
+	}
+
+	/* Call recovery handler in the DRIVER_RECOVERY event context
+	 * instead of scheduling work. In that way complete recovery
+	 * will be done as part of DRIVER_RECOVERY event and get
+	 * serialized with other events.
+	 */
+	cnss_recovery_handler(plat_priv);
 }
 
 static int cnss_mhi_pm_runtime_get(struct mhi_controller *mhi_ctrl)

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include <linux/utsname.h>
@@ -266,16 +266,12 @@ void adreno_parse_ib_lpac(struct kgsl_device *device,
 
 }
 
-static void dump_all_ibs(struct kgsl_device *device,
-			struct adreno_ringbuffer *rb,
-			struct kgsl_snapshot *snapshot)
+void adreno_snapshot_dump_all_ibs(struct kgsl_device *device,
+			unsigned int *rbptr, struct kgsl_snapshot *snapshot)
 {
 	int index = 0;
-	unsigned int *rbptr;
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	struct kgsl_iommu *iommu = KGSL_IOMMU(device);
-
-	rbptr = rb->buffer_desc->hostptr;
 
 	for (index = 0; index < KGSL_RB_DWORDS;) {
 
@@ -334,13 +330,23 @@ static void snapshot_rb_ibs(struct kgsl_device *device,
 	if (device->snapshot_atomic)
 		return;
 
+	rbptr = rb->buffer_desc->hostptr;
+	/*
+	 * KGSL tries to dump the active IB first. If it is not present, then
+	 * only it dumps all the IBs. In few cases, non-active IBs may help to
+	 * establish the flow and understand the hardware state better.
+	 */
+	if (device->dump_all_ibs) {
+		adreno_snapshot_dump_all_ibs(device, rbptr, snapshot);
+		return;
+	}
+
 	/*
 	 * Figure out the window of ringbuffer data to dump.  First we need to
 	 * find where the last processed IB ws submitted.  Start walking back
 	 * from the rptr
 	 */
 	index = rptr;
-	rbptr = rb->buffer_desc->hostptr;
 
 	do {
 		index--;
@@ -393,7 +399,7 @@ static void snapshot_rb_ibs(struct kgsl_device *device,
 	 */
 
 	if (index == rb->wptr) {
-		dump_all_ibs(device, rb, snapshot);
+		adreno_snapshot_dump_all_ibs(device, rb->buffer_desc->hostptr, snapshot);
 		return;
 	}
 
@@ -591,19 +597,6 @@ out:
 	spin_unlock(&process->mem_lock);
 	return ret;
 }
-
-struct snapshot_ib_meta {
-	struct kgsl_snapshot *snapshot;
-	struct kgsl_snapshot_object *obj;
-	uint64_t ib1base;
-	uint64_t ib1size;
-	uint64_t ib2base;
-	uint64_t ib2size;
-	u64 ib1base_lpac;
-	u64 ib1size_lpac;
-	u64 ib2base_lpac;
-	u64 ib2size_lpac;
-};
 
 static void kgsl_snapshot_add_active_ib_obj_list(struct kgsl_device *device,
 		struct kgsl_snapshot *snapshot)
@@ -809,14 +802,14 @@ static size_t snapshot_ib(struct kgsl_device *device, u8 *buf,
 static void dump_object(struct kgsl_device *device, int obj,
 		struct kgsl_snapshot *snapshot)
 {
-	struct snapshot_ib_meta metadata;
-
 	metadata.snapshot = snapshot;
 	metadata.obj = &objbuf[obj];
 	metadata.ib1base = snapshot->ib1base;
 	metadata.ib1size = snapshot->ib1size;
 	metadata.ib2base = snapshot->ib2base;
 	metadata.ib2size = snapshot->ib2size;
+	metadata.ib3base = snapshot->ib3base;
+	metadata.ib3size = snapshot->ib3size;
 	metadata.ib1base_lpac = snapshot->ib1base_lpac;
 	metadata.ib1size_lpac = snapshot->ib1size_lpac;
 	metadata.ib2base_lpac = snapshot->ib2base_lpac;
@@ -1289,7 +1282,10 @@ size_t adreno_snapshot_registers_v2(struct kgsl_device *device, u8 *buf,
 			*data++ = cnt;
 		}
 		for (k = ptr[0]; k <= ptr[1]; k++) {
-			kgsl_regread(device, k, data);
+			if (adreno_is_cx_dbgc_register(device, k))
+				adreno_cx_dbgc_regread(device, k, data);
+			else
+				kgsl_regread(device, k, data);
 			data++;
 		}
 	}

@@ -203,6 +203,16 @@ config REGULATOR_ARM_SCMI
 	  This driver uses SCMI Message Protocol driver to interact with the
 	  firmware providing the device Voltage functionality.
 
+config REGULATOR_AP72200
+	tristate "Diodes Incorporated AP72200 Buck-Boost Regulator Driver"
+	depends on I2C
+	help
+	  This driver provides support for AP72200 buck-boost regulator with
+	  a input range of 2.3 to 5.5 V and output range of 2.6 to 5.14V.
+
+	  Say M here if you want to include support for the regulator as a
+          module. The module will be named "ap72200-regulator".
+
 config REGULATOR_AS3711
 	tristate "AS3711 PMIC"
 	depends on MFD_AS3711
@@ -654,6 +664,16 @@ config REGULATOR_MAX77693
 	  The regulators include two LDOs, 'SAFEOUT1', 'SAFEOUT2'
 	  and one current regulator 'CHARGER'. This is suitable for
 	  Exynos-4x12 (MAX77693) or Exynos5433 (MAX77843) SoC chips.
+
+config REGULATOR_MAX77720
+	tristate "ADI max77720 regulator"
+	depends on I2C
+	select REGMAP_I2C
+	help
+	  This driver supports MAX77720 voltage regulator chip via I2C bus.
+	  The driver updates various registers to configure the
+	  regulator to output required voltages. It includes support
+	  for control of voltage and ramp speed.
 
 config REGULATOR_MAX77802
 	tristate "Maxim 77802 regulator"
