@@ -1051,7 +1051,6 @@ static int query_regdb(const char *alpha2)
 	return -ENODATA;
 }
 
-#if 0
 static void regdb_fw_cb(const struct firmware *fw, void *context)
 {
 	int set_error = 0;
@@ -1095,7 +1094,6 @@ static void regdb_fw_cb(const struct firmware *fw, void *context)
 
 	release_firmware(fw);
 }
-#endif
 
 MODULE_FIRMWARE("regulatory.db");
 

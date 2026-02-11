@@ -770,7 +770,7 @@ static void handle_message(struct battery_chg_dev *bcdev, void *data,
 		break;
 	case BC_XM_STATUS_GET:
 		pst = &bcdev->psy_list[PSY_TYPE_XM];
-		if (validate_message(resp_msg, len) &&
+		if (validate_message(bcdev, resp_msg, len) &&
 			resp_msg->property_id < pst->prop_count) {
 			pst->prop[resp_msg->property_id] = resp_msg->value;
 			ack_set = true;
@@ -2368,6 +2368,7 @@ static CLASS_ATTR_RW(input_suspend);
 
 static ssize_t StopCharging_Test_show(struct class *c,
 					struct class_attribute *attr, char *buf)
+{
 	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
 						battery_class);
 	int rc;
