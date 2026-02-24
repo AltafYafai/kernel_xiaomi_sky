@@ -2321,7 +2321,7 @@ static int fts_ts_suspend(struct device *dev)
 		fts_data->palm_sensor_switch = false;
 	}
 #endif
-
+    msleep(250);
     fts_esdcheck_suspend(ts_data);
 
     if (g_priximity_enable) {
