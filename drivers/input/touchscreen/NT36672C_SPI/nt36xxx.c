@@ -2798,6 +2798,8 @@ static int32_t nvt_ts_suspend(struct device *dev)
 		return 0;
 	}
 
+	msleep(250);
+
 #if WAKEUP_GESTURE
 	if (g_gesture_flag == false)
 		nvt_irq_enable(false);
