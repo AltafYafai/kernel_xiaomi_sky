@@ -33,7 +33,7 @@
 #include <linux/bitfield.h>
 #include <linux/devfreq.h>
 #include <linux/keyslot-manager.h>
-#include "unipro.h"
+#include "mi-unipro.h"
 
 #include <asm/irq.h>
 #include <asm/byteorder.h>
@@ -45,9 +45,13 @@
 #include <scsi/scsi_eh.h>
 #include <linux/android_kabi.h>
 
-#include "ufs.h"
-#include "ufs_quirks.h"
-#include "ufshci.h"
+#include "mi-ufs.h"
+#include "mi_ufs_quirks.h"
+#include "mi-ufshci.h"
+
+#if defined(CONFIG_CLD)
+#include "cld/mi_cld.h"
+#endif
 
 #define UFSHCD "ufshcd"
 #define UFSHCD_DRIVER_VERSION "0.2"
@@ -81,18 +85,6 @@ enum ufs_event_type {
 
 	UFS_EVT_CNT,
 };
-
-/* UFSHCD error handling flags */
-enum {
-	UFSHCD_EH_IN_PROGRESS = (1 << 0),
-};
-
-#define ufshcd_set_eh_in_progress(h) \
-	((h)->eh_flags |= UFSHCD_EH_IN_PROGRESS)
-#define ufshcd_eh_in_progress(h) \
-	((h)->eh_flags & UFSHCD_EH_IN_PROGRESS)
-#define ufshcd_clear_eh_in_progress(h) \
-	((h)->eh_flags &= ~UFSHCD_EH_IN_PROGRESS)
 
 /* Host UIC error code PHY adapter layer */
 enum ufshcd_ec_pa {
@@ -984,11 +976,29 @@ struct ufs_hba {
 	struct dentry *debugfs_root;
 #endif
 
+#if defined(CONFIG_CLD)
+	struct ufscld_dev cld;
+#endif
+
 	ANDROID_KABI_RESERVE(1);
 	ANDROID_KABI_RESERVE(2);
 	ANDROID_KABI_RESERVE(3);
 	ANDROID_KABI_RESERVE(4);
 };
+
+/*
+* customer debug interface
+*/
+struct UFS_ERR_STATE_DEBUG {
+       u64 err_occurred; /*if happend err*/
+       char err_reason[10][32]; /*err reason*/
+};
+
+struct UFS_DATA {
+       struct UFS_ERR_STATE_DEBUG ufs_err_state;
+};
+
+struct UFS_DATA *get_ufs_data(void);
 
 /* Returns true if clocks can be gated. Otherwise false */
 static inline bool ufshcd_is_clkgating_allowed(struct ufs_hba *hba)
@@ -1090,12 +1100,6 @@ int ufshcd_wait_for_register(struct ufs_hba *hba, u32 reg, u32 mask,
 void ufshcd_parse_dev_ref_clk_freq(struct ufs_hba *hba, struct clk *refclk);
 void ufshcd_update_evt_hist(struct ufs_hba *hba, u32 id, u32 val);
 void ufshcd_hba_stop(struct ufs_hba *hba);
-void ufshcd_complete_requests(struct ufs_hba *hba);
-void ufshcd_release_scsi_cmd(struct ufs_hba *hba,
-				    struct ufshcd_lrb *lrbp);
-void ufshcd_err_handling_prepare(struct ufs_hba *hba);
-void ufshcd_err_handling_unprepare(struct ufs_hba *hba);
-
 
 static inline void check_upiu_size(void)
 {
@@ -1209,11 +1213,20 @@ static inline int ufshcd_disable_host_tx_lcc(struct ufs_hba *hba)
 }
 
 /* Expose Query-Request API */
+int mi_ufshcd_query_descriptor_retry(struct ufs_hba *hba,
+				     enum query_opcode opcode,
+				     enum desc_idn idn, u8 index, u8 selector,
+				     u8 *desc_buf, int *buf_len);
 int ufshcd_query_descriptor_retry(struct ufs_hba *hba,
 				  enum query_opcode opcode,
 				  enum desc_idn idn, u8 index,
 				  u8 selector,
 				  u8 *desc_buf, int *buf_len);
+int mi_ufshcd_read_desc_param(struct ufs_hba *hba,
+				  enum desc_idn desc_id,
+				  int desc_index, u8 param_offset,
+				  u8 *param_read_buf,
+				  u8 param_size);
 int ufshcd_read_desc_param(struct ufs_hba *hba,
 			   enum desc_idn desc_id,
 			   int desc_index,
@@ -1448,4 +1461,23 @@ int ufshcd_dump_regs(struct ufs_hba *hba, size_t offset, size_t len,
 		     const char *prefix);
 int ufshcd_uic_hibern8_enter(struct ufs_hba *hba);
 int ufshcd_uic_hibern8_exit(struct ufs_hba *hba);
+
+int ufshcd_wb_ctrl(struct ufs_hba *hba, bool enable);
+int ufshcd_wb_toggle_flush_during_h8(struct ufs_hba *hba, bool set);
+void ufshcd_wb_toggle_flush(struct ufs_hba *hba, bool enable);
+
+#if defined(CONFIG_UFSGKI)
+#if defined(CONFIG_CLD)
+void ufshcd_scsi_block_requests(struct ufs_hba *hba);
+int ufshcd_wait_for_doorbell_clr(struct ufs_hba *hba, u64 wait_timeout_us);
+void ufshcd_scsi_unblock_requests(struct ufs_hba *hba);
+#endif
+int ufshcd_query_flag_sel(struct ufs_hba *hba, enum query_opcode opcode,
+			  enum flag_idn idn, u8 index, u8 selector,
+			  bool *flag_res);
+int ufshcd_read_desc_param_sel(struct ufs_hba *hba, enum desc_idn desc_id,
+			       int desc_index, u8 selector, u8 param_offset,
+			       u8 *param_read_buf, u8 param_size);
+#endif
+
 #endif /* End of Header */
