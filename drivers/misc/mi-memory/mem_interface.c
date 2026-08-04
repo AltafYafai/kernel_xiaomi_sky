@@ -47,7 +47,7 @@ static int ufs_read_string_desc(struct ufs_hba *hba, u8 desc_index, u8 **buf, bo
 	if (!uc_str)
 		return -ENOMEM;
 
-	ret = mi_ufshcd_read_desc_param(hba, QUERY_DESC_IDN_STRING, desc_index, 0,
+	ret = ufshcd_read_desc_param(hba, QUERY_DESC_IDN_STRING, desc_index, 0,
 				     (u8 *)uc_str, QUERY_DESC_MAX_SIZE);
 	if (ret < 0) {
 		dev_err(hba->dev, "Reading String Desc failed after %d retries. err = %d\n",
@@ -114,7 +114,7 @@ int ufs_get_string_desc(struct ufs_hba *hba, void* buf, int size, enum device_de
 	if (!desc_buf)
 		return -ENOMEM;
 	pm_runtime_get_sync(hba->dev);
-	ret = mi_ufshcd_query_descriptor_retry(hba,
+	ret = ufshcd_query_descriptor_retry(hba,
 		UPIU_QUERY_OPCODE_READ_DESC, QUERY_DESC_IDN_DEVICE,
 		0, 0, desc_buf, &desc_len);
 	if (ret) {
@@ -143,7 +143,7 @@ int ufs_read_desc_param(struct ufs_hba *hba, enum desc_idn desc_id, u8 desc_inde
 		return -EINVAL;
 
 	pm_runtime_get_sync(hba->dev);
-	ret = mi_ufshcd_read_desc_param(hba, desc_id, desc_index,
+	ret = ufshcd_read_desc_param(hba, desc_id, desc_index,
 				param_offset, desc_buf, param_size);
 	pm_runtime_put_sync(hba->dev);
 

@@ -78,7 +78,7 @@ static int ufshcd_read_desc(struct ufs_hba *hba, enum desc_idn desc_id, int desc
 	int ret = 0;
 
 	pm_runtime_get_sync(hba->dev);
-	ret = mi_ufshcd_read_desc_param(hba, desc_id, desc_index, 0, buf, size);
+	ret = ufshcd_read_desc_param(hba, desc_id, desc_index, 0, buf, size);
 	pm_runtime_put_sync(hba->dev);
 
 	return ret;
@@ -995,10 +995,14 @@ static DEVICE_ATTR_RO(hr);
 static ssize_t err_state_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	int ret = 0;
+#ifdef CONFIG_SCSI_UFS_QCOM
 	struct UFS_DATA *ufs_data_ptr = get_ufs_data();
 
 	if (ufs_data_ptr)
 		ret = snprintf(buf, PAGE_SIZE, "%d\n", ufs_data_ptr->ufs_err_state.err_occurred);
+#else
+	ret = snprintf(buf, PAGE_SIZE, "0\n");
+#endif
 	return ret;
 }
 
@@ -1007,6 +1011,7 @@ static DEVICE_ATTR_RO(err_state);
 static ssize_t err_reason_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	int ret = 0;
+#ifdef CONFIG_SCSI_UFS_QCOM
 	struct UFS_DATA *ufs_data_ptr = get_ufs_data();
 
 	if (ufs_data_ptr)
@@ -1020,6 +1025,9 @@ static ssize_t err_reason_show(struct device *dev, struct device_attribute *attr
 									ufs_data_ptr->ufs_err_state.err_reason+7,
 									ufs_data_ptr->ufs_err_state.err_reason+8,
 									ufs_data_ptr->ufs_err_state.err_reason+9);
+#else
+	ret = snprintf(buf, PAGE_SIZE, "N/A\n");
+#endif
 	return ret;
 }
 
