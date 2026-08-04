@@ -8,6 +8,7 @@
 #define __SOC_QCOM_SOCINFO_H__
 
 #include <linux/types.h>
+#include <linux/errno.h>
 
 enum subset_part_type {
 	PART_UNKNOWN      = 0,
